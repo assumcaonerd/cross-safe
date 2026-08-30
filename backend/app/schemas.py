@@ -54,6 +54,16 @@ class TelemetryOut(BaseModel):
     transport_mode: str
     event_type: str
     recorded_at: datetime
+    source: str = "in_app"
+    distance_m: float | None = None
+    city: str | None = None
+
+class PriorityTicket(BaseModel):
+    crosswalk_id: int | None
+    city: str
+    event_type: str
+    hits: int
+    level: int
 
 class NearbyQuery(BaseModel):
     lat: float
