@@ -1,12 +1,10 @@
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from .config import settings
 from .db import init_schema
+from .routers.municipal import router as municipal_router
 from .routers.spatial import router as spatial_router
-
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -16,16 +14,10 @@ async def lifespan(_: FastAPI):
         print(f"schema init skipped: {exc}")
     yield
 
-
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(spatial_router, prefix="/v1")
-
+app.include_router(municipal_router, prefix="/v1/municipal")
 
 @app.get("/health")
 def health() -> dict:
