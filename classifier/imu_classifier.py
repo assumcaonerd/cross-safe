@@ -1,15 +1,15 @@
-"""Lightweight edge classifier for transport mode and hard-brake events.
-
-The first version is heuristic on purpose: it must run on-device with no
-heavy model, using only IMU windows plus optional GPS speed.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
 import math
 
+SAMPLING_HZ = 50
+WINDOW_SECONDS = 2
+WINDOW_SIZE = SAMPLING_HZ * WINDOW_SECONDS
+ACCEL_VARIANCE_LEV_MAX = 4.5
+GYRO_VARIANCE_LEV_MIN = 0.15
+VIBRATION_NOISE_THRESHOLD = 0.8
 
 class TransportMode(str, Enum):
     PEDESTRIAN = "pedestrian"
@@ -17,7 +17,6 @@ class TransportMode(str, Enum):
     MOTORCYCLE = "motorcycle"
     AUTOMOTIVE = "automotive"
     UNKNOWN = "unknown"
-
 
 @dataclass(frozen=True)
 class ImuSample:
@@ -30,7 +29,6 @@ class ImuSample:
     gz: float
     speed_mps: float | None = None
 
-
 @dataclass(frozen=True)
 class Classification:
     mode: TransportMode
@@ -39,104 +37,62 @@ class Classification:
     approach_vector_m: float
     features: dict
 
-
-def _mag(x: float, y: float, z: float) -> float:
+def _mag(x, y, z):
     return math.sqrt(x * x + y * y + z * z)
 
-
-def _mean(values: list[float]) -> float:
+def _mean(values):
     return sum(values) / len(values) if values else 0.0
 
-
-def _std(values: list[float]) -> float:
+def _var(values):
     if len(values) < 2:
         return 0.0
     mu = _mean(values)
-    var = sum((v - mu) ** 2 for v in values) / (len(values) - 1)
-    return math.sqrt(var)
+    return sum((v - mu) ** 2 for v in values) / len(values)
 
-
-def _dominant_hz(times: list[float], series: list[float]) -> float:
-    if len(series) < 6:
-        return 0.0
-    mu = _mean(series)
-    crossings = 0
-    for prev, curr in zip(series, series[1:]):
-        if (prev - mu) == 0:
-            continue
-        if (prev - mu) * (curr - mu) < 0:
-            crossings += 1
-    duration = max(times[-1] - times[0], 1e-6)
-    return (crossings / 2.0) / duration
-
-
-def extract_features(window: list[ImuSample]) -> dict:
+def extract_features(window):
     if len(window) < 4:
         raise ValueError("need at least 4 IMU samples")
-
-    acc = [_mag(s.ax, s.ay, s.az) for s in window]
-    gyr = [_mag(s.gx, s.gy, s.gz) for s in window]
-    times = [s.t_s for s in window]
-    speeds = [s.speed_mps for s in window if s.speed_mps is not None]
-    vertical = [s.az for s in window]
-
-    dt = max(times[-1] - times[0], 1e-6)
-    jerk = []
-    for i in range(1, len(acc)):
-        step = max(times[i] - times[i - 1], 1e-3)
-        jerk.append((acc[i] - acc[i - 1]) / step)
-
-    long_accel = [s.ax for s in window]
-    min_long = min(long_accel)
-
+    slice_ = window[-WINDOW_SIZE:]
+    acc = [_mag(s.ax, s.ay, s.az) for s in slice_]
+    gyr = [_mag(s.gx, s.gy, s.gz) for s in slice_]
+    times = [s.t_s for s in slice_]
+    speeds = [s.speed_mps for s in slice_ if s.speed_mps is not None]
+    diffs = [abs(acc[i] - acc[i - 1]) for i in range(1, len(acc))]
     return {
-        "acc_mean": _mean(acc),
-        "acc_std": _std(acc),
-        "gyro_mean": _mean(gyr),
+        "acc_var": _var(acc),
+        "gyro_var": _var(gyr),
+        "vibration": _mean(diffs),
         "speed_mean": _mean(speeds) if speeds else 0.0,
-        "cadence_hz": _dominant_hz(times, vertical),
-        "jerk_std": _std(jerk),
-        "min_long_accel": min_long,
-        "duration_s": dt,
+        "min_long_accel": min(s.ax for s in slice_),
+        "samples": len(slice_),
+        "duration_s": max(times[-1] - times[0], 1e-6),
     }
 
-
-def classify(window: list[ImuSample]) -> Classification:
+def classify(window):
     feats = extract_features(window)
+    if feats["samples"] < WINDOW_SIZE:
+        return Classification(TransportMode.UNKNOWN, 0.2, False, 25.0, feats)
     speed = feats["speed_mean"]
-    cadence = feats["cadence_hz"]
-    acc_std = feats["acc_std"]
-    gyro = feats["gyro_mean"]
+    acc_var = feats["acc_var"]
+    gyro_var = feats["gyro_var"]
+    vibration = feats["vibration"]
     hard_brake = feats["min_long_accel"] <= -3.5 and speed >= 3.0
-
-    mode = TransportMode.UNKNOWN
-    confidence = 0.40
-
-    if speed < 1.8 and acc_std < 1.6:
-        mode = TransportMode.PEDESTRIAN
-        confidence = 0.78
-    elif 1.6 <= speed <= 12.0 and 0.7 <= cadence <= 2.6:
-        mode = TransportMode.LEV
-        confidence = 0.74
-    elif speed >= 4.0 and gyro >= 0.8 and acc_std >= 2.2 and cadence < 0.7:
-        mode = TransportMode.MOTORCYCLE
-        confidence = 0.66
-    elif speed >= 8.0 and cadence < 0.8:
-        mode = TransportMode.AUTOMOTIVE
-        confidence = 0.72
-    elif speed >= 3.0:
-        mode = TransportMode.LEV if cadence >= 0.6 else TransportMode.AUTOMOTIVE
-        confidence = 0.52
-
+    if vibration > VIBRATION_NOISE_THRESHOLD and gyro_var > GYRO_VARIANCE_LEV_MIN:
+        mode, confidence = (TransportMode.LEV, 0.82) if acc_var < ACCEL_VARIANCE_LEV_MAX else (TransportMode.MOTORCYCLE, 0.74)
+    elif acc_var >= ACCEL_VARIANCE_LEV_MAX and gyro_var < GYRO_VARIANCE_LEV_MIN:
+        mode, confidence = TransportMode.AUTOMOTIVE, 0.80
+    elif speed < 1.8 and vibration < 0.45:
+        mode, confidence = TransportMode.PEDESTRIAN, 0.78
+    else:
+        mode, confidence = TransportMode.PEDESTRIAN, 0.55
     approach = max(0.0, speed * 1.2 + (speed * speed) / 8.0 + 25.0)
-
     if hard_brake:
         confidence = min(0.95, confidence + 0.08)
+    return Classification(mode, round(confidence, 3), hard_brake, round(approach, 1), feats)
 
-    return Classification(
-        mode=mode,
-        confidence=round(confidence, 3),
-        hard_brake=hard_brake,
-        approach_vector_m=round(approach, 1),
-        features=feats,
-    )
+class CrossSafeIMUClassifier:
+    def __init__(self, sampling_rate_hz=SAMPLING_HZ):
+        self.sampling_rate = sampling_rate_hz
+        self.window_size = sampling_rate_hz * WINDOW_SECONDS
+    def classify_transport_mode(self, samples):
+        return classify(samples).mode.value
