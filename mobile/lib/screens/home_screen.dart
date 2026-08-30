@@ -6,6 +6,7 @@ import '../services/haptic_service.dart';
 import '../services/imu_service.dart';
 import 'driver_awareness_screen.dart';
 import 'driver_interrupt_screen.dart';
+import 'lev_pilot_screen.dart';
 import 'pedestrian_occlusion_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,6 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _awarenessOpen = false;
   bool _interruptOpen = false;
   bool _occlusionOpen = false;
+  bool _levOpen = false;
+  int _respectScore = 98;
 
   Future<void> _arm() async {
     final ok = await _geo.ensurePermission();
@@ -69,8 +72,27 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         continue;
       }
-      if (_role != UserRole.driver) {
-        if (urgent) await _haptic.alertFor(_role, urgent: true);
+      if (_role == UserRole.rider) {
+        if (classification.hardBrake) {
+          _respectScore = (_respectScore - 12).clamp(0, 100);
+        }
+        final approaching = nearest.distanceM <= window + 80;
+        if (approaching && !_levOpen && mounted) {
+          _levOpen = true;
+          await Navigator.of(context).push(
+            PageRouteBuilder(
+              opaque: false,
+              pageBuilder: (_, __, ___) => LevPilotScreen(
+                speedKmh: speedKmh,
+                distanceM: nearest.distanceM,
+                respectScore: _respectScore,
+                crosswalkName: nearest.name,
+                hardBrake: classification.hardBrake,
+              ),
+            ),
+          );
+          _levOpen = false;
+        }
         continue;
       }
       if (urgent && !_interruptOpen && mounted) {
@@ -144,6 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
             OutlinedButton(
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PedestrianOcclusionScreen())),
               child: const Text('Previa da tela 1.4 (pedestre)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LevPilotScreen())),
+              child: const Text('Previa do modo LEV (e-bike)'),
             ),
           ],
         ),
