@@ -1,0 +1,66 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+class TelemetryEvent {
+  TelemetryEvent({
+    required this.transportMode,
+    required this.eventType,
+    required this.lat,
+    required this.lon,
+    this.speedMps,
+    this.decelerationMps2,
+    this.crosswalkId,
+    this.distanceM,
+    this.respectScore,
+    this.screenActive,
+    this.modeConfidence,
+    this.source = 'in_app',
+    this.city = 'Vitoria',
+    this.features = const {},
+  });
+
+  final String transportMode;
+  final String eventType;
+  final double lat;
+  final double lon;
+  final double? speedMps;
+  final double? decelerationMps2;
+  final int? crosswalkId;
+  final double? distanceM;
+  final int? respectScore;
+  final bool? screenActive;
+  final double? modeConfidence;
+  final String source;
+  final String city;
+  final Map<String, dynamic> features;
+
+  Map<String, dynamic> toJson() => {
+        'transport_mode': transportMode,
+        'event_type': eventType,
+        'lat': lat,
+        'lon': lon,
+        'speed_mps': speedMps,
+        'deceleration_mps2': decelerationMps2,
+        'crosswalk_id': crosswalkId,
+        'distance_m': distanceM,
+        'respect_score': respectScore,
+        'screen_active': screenActive,
+        'mode_confidence': modeConfidence,
+        'source': source,
+        'city': city,
+        'features': features,
+      };
+}
+
+class TelemetryService {
+  TelemetryService({this.baseUrl = 'http://127.0.0.1:8000'});
+  final String baseUrl;
+
+  Future<void> postEvent(TelemetryEvent event) async {
+    await http.post(
+      Uri.parse('$baseUrl/v1/telemetry'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(event.toJson()),
+    );
+  }
+}
