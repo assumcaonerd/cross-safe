@@ -4,6 +4,7 @@ import '../models/role.dart';
 import '../services/geofence_service.dart';
 import '../services/haptic_service.dart';
 import '../services/imu_service.dart';
+import 'driver_interrupt_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,15 +18,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final _geo = GeofenceService();
   final _imu = ImuService();
   final _haptic = HapticService();
-  String _status = 'Aguardando permissão de localização';
+  String _status = 'Aguardando permissao de localizacao';
 
   Future<void> _arm() async {
     final ok = await _geo.ensurePermission();
     if (!ok) {
-      setState(() => _status = 'Localização negada');
+      setState(() => _status = 'Localizacao negada');
       return;
     }
-    setState(() => _status = 'Monitorando faixas próximas');
+    setState(() => _status = 'Monitorando faixas proximas');
     await for (final position in _geo.watch()) {
       if (!mounted) return;
       _imu.lastSpeed = position.speed;
@@ -45,6 +46,18 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         if (urgent || classification.hardBrake) {
           await _haptic.alertFor(_role, urgent: true);
+          if (_role == UserRole.driver && mounted) {
+            await Navigator.of(context).push(
+              PageRouteBuilder(
+                opaque: true,
+                pageBuilder: (_, __, ___) => DriverInterruptScreen(
+                  distanceM: nearest.distanceM,
+                  speedKmh: position.speed * 3.6,
+                  crosswalkName: nearest.name,
+                ),
+              ),
+            );
+          }
         }
       }
     }
@@ -59,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Quem está usando o aparelho agora?'),
+            const Text('Quem esta usando o aparelho agora?'),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -79,6 +92,17 @@ class _HomeScreenState extends State<HomeScreen> {
             FilledButton(
               onPressed: _arm,
               child: const Text('Ativar alerta de faixa'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DriverInterruptScreen(),
+                  ),
+                );
+              },
+              child: const Text('Previa da tela 1.3 (motorista)'),
             ),
           ],
         ),
