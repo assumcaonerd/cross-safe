@@ -4,6 +4,7 @@ import '../models/role.dart';
 import '../services/geofence_service.dart';
 import '../services/haptic_service.dart';
 import '../services/imu_service.dart';
+import 'driver_awareness_screen.dart';
 import 'driver_interrupt_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,6 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _imu = ImuService();
   final _haptic = HapticService();
   String _status = 'Aguardando permissao de localizacao';
+  bool _awarenessOpen = false;
+  bool _interruptOpen = false;
 
   Future<void> _arm() async {
     final ok = await _geo.ensurePermission();
@@ -36,29 +39,48 @@ class _HomeScreenState extends State<HomeScreen> {
         lon: position.longitude,
         speedMps: position.speed,
       );
-      if (hits.isNotEmpty) {
-        final nearest = hits.first;
-        final window = _geo.brakingWindow(position.speed);
-        final urgent = nearest.distanceM <= window;
-        setState(() {
-          _status =
-              '${_role.label}: ${nearest.name} a ${nearest.distanceM.toStringAsFixed(0)} m';
-        });
-        if (urgent || classification.hardBrake) {
-          await _haptic.alertFor(_role, urgent: true);
-          if (_role == UserRole.driver && mounted) {
-            await Navigator.of(context).push(
-              PageRouteBuilder(
-                opaque: true,
-                pageBuilder: (_, __, ___) => DriverInterruptScreen(
-                  distanceM: nearest.distanceM,
-                  speedKmh: position.speed * 3.6,
-                  crosswalkName: nearest.name,
-                ),
-              ),
-            );
-          }
-        }
+      if (hits.isEmpty) continue;
+      final nearest = hits.first;
+      final window = _geo.brakingWindow(position.speed);
+      final speedKmh = position.speed * 3.6;
+      final urgent = nearest.distanceM <= window || classification.hardBrake;
+      final early = !urgent && nearest.distanceM <= window + 120;
+      setState(() {
+        _status =
+            '${_role.label}: ${nearest.name} a ${nearest.distanceM.toStringAsFixed(0)} m';
+      });
+      if (_role != UserRole.driver) {
+        if (urgent) await _haptic.alertFor(_role, urgent: true);
+        continue;
+      }
+      if (urgent && !_interruptOpen && mounted) {
+        _interruptOpen = true;
+        await Navigator.of(context).push(
+          PageRouteBuilder(
+            opaque: true,
+            pageBuilder: (_, __, ___) => DriverInterruptScreen(
+              distanceM: nearest.distanceM,
+              speedKmh: speedKmh,
+              crosswalkName: nearest.name,
+            ),
+          ),
+        );
+        _interruptOpen = false;
+        continue;
+      }
+      if (early && !_awarenessOpen && !_interruptOpen && mounted) {
+        _awarenessOpen = true;
+        await Navigator.of(context).push(
+          PageRouteBuilder(
+            opaque: false,
+            pageBuilder: (_, __, ___) => DriverAwarenessScreen(
+              distanceM: nearest.distanceM,
+              speedKmh: speedKmh,
+              crosswalkName: nearest.name,
+            ),
+          ),
+        );
+        _awarenessOpen = false;
       }
     }
   }
@@ -97,12 +119,19 @@ class _HomeScreenState extends State<HomeScreen> {
             OutlinedButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const DriverInterruptScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const DriverAwarenessScreen()),
                 );
               },
-              child: const Text('Previa da tela 1.3 (motorista)'),
+              child: const Text('Previa da tela 1.2 (aproximacao)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const DriverInterruptScreen()),
+                );
+              },
+              child: const Text('Previa da tela 1.3 (critico)'),
             ),
           ],
         ),
