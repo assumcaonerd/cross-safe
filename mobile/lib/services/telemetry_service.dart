@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'offline_sync_service.dart';
 
 class TelemetryEvent {
   TelemetryEvent({
@@ -53,14 +52,13 @@ class TelemetryEvent {
 }
 
 class TelemetryService {
-  TelemetryService({this.baseUrl = 'http://127.0.0.1:8000'});
+  TelemetryService({this.baseUrl = 'http://127.0.0.1:8000', OfflineSyncService? outbox})
+      : outbox = outbox ?? OfflineSyncService(baseUrl: baseUrl);
+
   final String baseUrl;
+  final OfflineSyncService outbox;
 
   Future<void> postEvent(TelemetryEvent event) async {
-    await http.post(
-      Uri.parse('$baseUrl/v1/telemetry'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(event.toJson()),
-    );
+    await outbox.enqueueTelemetry(event.toJson());
   }
 }
