@@ -1,0 +1,24 @@
+name: cross_safe
+description: Cliente de borda CrossSafe para motoristas, ciclistas e pedestres.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  geolocator: ^13.0.2
+  sensors_plus: ^6.1.1
+  vibration: ^2.0.0
+  http: ^1.2.2
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
