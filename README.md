@@ -1,49 +1,76 @@
 # CrossSafe
 
-Plataforma open source de cidade inteligente para reduzir distração digital e
+Plataforma open source de cidade inteligente para reduzir distracao digital e
 proteger vidas em faixas de pedestres. Conecta motoristas, pedestres e
-condutores de e-bike com telemetria na borda, geofence e auditoria
-colaborativa da infraestrutura.
+condutores de e-bike com classificacao na borda, geofence e telemetria para
+priorizacao da infraestrutura urbana.
 
-Licença: Apache 2.0.
+Licenca: Apache 2.0.
 
-## Estado atual
+## Estado atual: v0.2 de desenvolvimento
 
-O repositório deixou de ser só manifesto. A branch de trabalho agora tem um
-monorepo mínimo alinhado às issues #1, #2 e #3:
+O repositorio possui um circuito funcional de desenvolvimento:
 
-- `backend/` FastAPI + PostGIS (faixas, zonas, telemetria, busca por raio)
-- `classifier/` motor IMU heurístico, testado no CI
-- `mobile/` esqueleto Flutter (geofence, IMU, haptic)
-- `docker-compose.yml` sobe Postgres/PostGIS e a API
+- `backend/`: FastAPI + PostgreSQL/PostGIS;
+- `backend/alembic/`: migrations e seeds versionados;
+- `classifier/`: classificador IMU heuristico em Python;
+- `mobile/`: Flutter com GPS, IMU a 50 Hz, haptic e interfaces de alerta;
+- telemetria mobile persistida primeiro em SQLite e sincronizada com a API;
+- ranking municipal para frenagens bruscas e interrupcoes de pedestre;
+- CI com PostGIS real, testes de integracao, analise Flutter e build Android.
 
-## Subir localmente
+A v0.2 ainda e uma base de piloto. Monitoramento continuo em background,
+politica final de autenticacao da API, calibracao com telemetria de campo e
+validacao em dispositivos reais continuam no roadmap.
+
+## Subir backend localmente
 
 ```bash
 docker compose up --build
 ```
 
-API em `http://localhost:8000/health` e docs em `http://localhost:8000/docs`.
+O container da API espera o PostGIS ficar pronto e executa automaticamente:
 
-Testes sem banco:
+```bash
+alembic upgrade head
+```
+
+Depois:
+
+- health: `http://localhost:8000/health`
+- OpenAPI: `http://localhost:8000/docs`
+
+O `/health` retorna HTTP 503 quando o banco/PostGIS nao esta disponivel.
+
+## Testes Python
+
+Os testes unitarios continuam podendo rodar sem banco:
 
 ```bash
 pip install -r backend/requirements.txt
 pytest -q
 ```
 
-App mobile: leia `mobile/README.md`.
+Os testes de integracao com PostGIS sao executados pelo GitHub Actions com
+`CROSSSAFE_INTEGRATION=1`.
+
+## Mobile
+
+Leia `mobile/README.md` para gerar o scaffold nativo e configurar a URL da API.
+Em aparelho fisico, use `CROSSSAFE_API_BASE_URL` via `--dart-define`.
 
 ## Arquitetura resumida
 
-1. Motorista e motociclista: janela de alerta cresce com a velocidade.
-2. E-bike e patinete: o IMU tenta separar LEV de carro e de pedestre.
-3. Pedestre: se a tela está ativa perto de uma faixa, o app interrompe.
-4. Prefeitura: telemetria anônima e relatos viram prioridade de manutenção.
+1. GPS localiza faixas dentro de um raio dinamico.
+2. IMU classifica o padrao de movimento e detecta eventos bruscos.
+3. O papel selecionado define o alerta para motorista, LEV ou pedestre.
+4. O evento e salvo localmente antes de qualquer tentativa de rede.
+5. A API persiste a telemetria no PostGIS.
+6. Eventos relevantes alimentam o ranking municipal de prioridade.
 
-Detalhe em `docs/architecture.md`.
+Detalhes em `docs/architecture.md`.
 
-## Contribuição
+## Contribuicao
 
-Siga `CONTRIBUTING.md`. Desenvolvimento entra por `develop`. Branches de
-feature no formato `feature/issue-[ID]-short-desc`.
+Siga `CONTRIBUTING.md`. Desenvolvimento entra por `develop`; mudancas para
+`main` devem passar por pull request e CI.
