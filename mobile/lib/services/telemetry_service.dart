@@ -1,3 +1,4 @@
+import '../config/api_config.dart';
 import 'offline_sync_service.dart';
 
 class TelemetryEvent {
@@ -52,8 +53,10 @@ class TelemetryEvent {
 }
 
 class TelemetryService {
-  TelemetryService({this.baseUrl = 'http://127.0.0.1:8000', OfflineSyncService? outbox})
-      : outbox = outbox ?? OfflineSyncService(baseUrl: baseUrl);
+  TelemetryService({String? baseUrl, OfflineSyncService? outbox})
+      : baseUrl = baseUrl ?? ApiConfig.baseUrl,
+        outbox = outbox ??
+            OfflineSyncService(baseUrl: baseUrl ?? ApiConfig.baseUrl);
 
   final String baseUrl;
   final OfflineSyncService outbox;
@@ -61,4 +64,6 @@ class TelemetryService {
   Future<void> postEvent(TelemetryEvent event) async {
     await outbox.enqueueTelemetry(event.toJson());
   }
+
+  Future<void> dispose() => outbox.dispose();
 }
