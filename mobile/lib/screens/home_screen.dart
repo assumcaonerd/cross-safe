@@ -132,14 +132,12 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (_role == UserRole.rider) {
-        if (classification.hardBrake) {
-          _respectScore = (_respectScore - 12).clamp(0, 100);
-        }
         final approaching = nearest.distanceM <= window + 80;
         final key = 'rider:${nearest.id}';
         if (approaching && !_levOpen && _cooldownAllows(key) && mounted) {
           _levOpen = true;
           if (classification.hardBrake) {
+            _respectScore = (_respectScore - 12).clamp(0, 100).toInt();
             await _haptic.alertFor(_role, urgent: true);
           }
           _recordTelemetry(
