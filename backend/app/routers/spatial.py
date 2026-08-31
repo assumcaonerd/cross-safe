@@ -1,8 +1,9 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from geoalchemy2 import Geography, Geometry
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID, ST_X, ST_Y
-from sqlalchemy import select
+from sqlalchemy import cast, select
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -21,9 +22,17 @@ from ..schemas import (
 
 router = APIRouter()
 
+_POINT_GEOMETRY = Geometry(geometry_type="POINT", srid=4326)
+_POINT_GEOGRAPHY = Geography(geometry_type="POINT", srid=4326)
+
 
 def _point(lon: float, lat: float):
-    return ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+    geometry = ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+    return cast(geometry, _POINT_GEOGRAPHY)
+
+
+def _as_geometry(column):
+    return cast(column, _POINT_GEOMETRY)
 
 
 @router.post("/crosswalks", response_model=CrosswalkOut, status_code=201)
@@ -67,11 +76,12 @@ def nearby_crosswalks(
         )
 
     origin = _point(lon, lat)
+    point_geometry = _as_geometry(Crosswalk.location)
     stmt = (
         select(
             Crosswalk,
-            ST_Y(Crosswalk.location).label("lat"),
-            ST_X(Crosswalk.location).label("lon"),
+            ST_Y(point_geometry).label("lat"),
+            ST_X(point_geometry).label("lon"),
         )
         .where(ST_DWithin(Crosswalk.location, origin, radius))
         .limit(50)
