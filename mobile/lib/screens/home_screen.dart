@@ -108,6 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
             mounted) {
           _occlusionOpen = true;
           await _haptic.alertFor(_role, urgent: true);
+          if (!mounted) {
+            _occlusionOpen = false;
+            return;
+          }
           _recordTelemetry(
             position: position,
             speedMps: speedMps,
@@ -140,6 +144,10 @@ class _HomeScreenState extends State<HomeScreen> {
             _respectScore = (_respectScore - 12).clamp(0, 100).toInt();
             await _haptic.alertFor(_role, urgent: true);
           }
+          if (!mounted) {
+            _levOpen = false;
+            return;
+          }
           _recordTelemetry(
             position: position,
             speedMps: speedMps,
@@ -170,6 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!_cooldownAllows(key)) return;
         _interruptOpen = true;
         await _haptic.alertFor(_role, urgent: true);
+        if (!mounted) {
+          _interruptOpen = false;
+          return;
+        }
         _recordTelemetry(
           position: position,
           speedMps: speedMps,
@@ -301,7 +313,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const Spacer(),
             FilledButton(
               onPressed: _monitoring ? _disarm : _arm,
-              child: Text(_monitoring ? 'Desativar alertas' : 'Ativar alerta de faixa'),
+              child: Text(
+                _monitoring ? 'Desativar alertas' : 'Ativar alerta de faixa',
+              ),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
@@ -320,7 +334,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PedestrianOcclusionScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const PedestrianOcclusionScreen(),
+                ),
               ),
               child: const Text('Previa da tela 1.4 (pedestre)'),
             ),
