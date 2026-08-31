@@ -63,13 +63,14 @@ class ImuService {
   }
 
   EdgeClassification classify() {
-    final speed = max(0.0, lastSpeed);
+    final speed = max(0.0, lastSpeed).toDouble();
+    final approach = (speed * 1.2 + pow(speed, 2) / 8 + 25).toDouble();
     if (_acc.length < windowSize) {
       return EdgeClassification(
         mode: EdgeMode.unknown,
         confidence: 0.2,
         hardBrake: false,
-        approachM: speed * 1.2 + pow(speed, 2) / 8 + 25,
+        approachM: approach,
         features: {
           'samples': _acc.length.toDouble(),
           'speed_mps': speed,
@@ -117,14 +118,13 @@ class ImuService {
       confidence = 0.78;
     }
 
-    if (hardBrake) confidence = min(0.95, confidence + 0.08);
-    final approach = speed * 1.2 + pow(speed, 2) / 8 + 25;
+    if (hardBrake) confidence = min(0.95, confidence + 0.08).toDouble();
 
     return EdgeClassification(
       mode: mode,
       confidence: confidence,
       hardBrake: hardBrake,
-      approachM: approach.toDouble(),
+      approachM: approach,
       features: {
         'acc_var': accVar,
         'gyro_var': gyroVar,
