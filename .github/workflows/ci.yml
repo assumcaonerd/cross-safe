@@ -2,18 +2,64 @@ name: ci
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, "stabilization/**"]
   pull_request:
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: crosssafe
+          POSTGRES_PASSWORD: crosssafe
+          POSTGRES_DB: crosssafe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U crosssafe -d crosssafe"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=12
+    env:
+      DATABASE_URL: postgresql+psycopg2://crosssafe:crosssafe@localhost:5432/crosssafe
+      CROSSSAFE_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend
         run: pip install -r backend/requirements.txt
-      - name: Unit tests
+      - name: Apply migrations
+        working-directory: backend
+        run: alembic -c alembic.ini upgrade head
+      - name: Backend and integration tests
         run: pytest -q
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Materialize Android scaffold
+        working-directory: mobile
+        run: flutter create . --platforms=android --project-name cross_safe --org com.crosssafe
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: flutter pub get
+      - name: Analyze Flutter
+        working-directory: mobile
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: mobile
+        run: flutter test
+      - name: Build Android debug APK
+        working-directory: mobile
+        run: flutter build apk --debug
