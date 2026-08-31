@@ -10,12 +10,16 @@ class NearbyCrosswalk {
   NearbyCrosswalk({
     required this.id,
     required this.name,
+    required this.city,
+    required this.state,
     required this.distanceM,
     required this.riskScore,
   });
 
   final int id;
   final String name;
+  final String city;
+  final String state;
   final double distanceM;
   final double riskScore;
 }
@@ -66,6 +70,8 @@ class GeofenceService {
             (item) => NearbyCrosswalk(
               id: item['id'] as int,
               name: item['name'] as String,
+              city: item['city'] as String,
+              state: item['state'] as String,
               distanceM: (item['distance_m'] as num?)?.toDouble() ?? 0,
               riskScore: (item['risk_score'] as num?)?.toDouble() ?? 0,
             ),
